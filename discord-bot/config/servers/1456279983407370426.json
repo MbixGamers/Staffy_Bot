@@ -1,0 +1,69 @@
+{
+  "guildId": "1456279983407370426",
+  "logChannelId": "1458181584220979414",
+  "ticketCategoryId": "1458181451521589469",
+  "adminRoleIds": [
+    "1458039422842048594"
+  ],
+  "cooldownHours": 24,
+  "categories": [
+    {
+      "name": "Void Staff",
+      "description": "Join Void's Staff team and help us!",
+      "roleId": "1458184001780187247",
+      "questions": [
+        {
+          "text": "Can you share what days and times you’re typically available to be active or help out on Discord? Please include your time zone and any specific hours that usually work best for you, so we can better schedule activities and support coverage.",
+          "type": "text"
+        },
+        {
+          "text": "If a new member joins the Discord and starts asking how to join the team or what the rules are, how would you greet them and explain everything in a clear and friendly way?",
+          "type": "text"
+        },
+        {
+          "text": "When you need to give a player a warning or timeout, how would you explain it in a way that feels fair and respectful instead of aggressive or rude? Do you decide whether to just delete their message, warn them, or mute/ban them? What do you think about giving second chances?",
+          "type": "text"
+        },
+        {
+          "text": "Being a moderator means teamwork. How would you help your fellow staff members during a busy tournament when things get chaotic or confusing?",
+          "type": "text"
+        },
+        {
+          "text": "When you need to give a player a warning or timeout, how would you explain it in a way that feels fair and respectful instead of aggressive or rude?",
+          "type": "text"
+        },
+        {
+          "text": "Imagine another moderator made a decision you personally don’t agree with. What would you do, would you correct them in public, talk to them privately, or go to a higher staff member?",
+          "type": "text"
+        },
+        {
+          "text": "A well-known player in your community starts breaking small rules, like spamming or talking over others in VC. You don’t want to seem harsh, but you also can’t ignore it. What’s the best way to remind them of the rules while still keeping things friendly and professional?",
+          "type": "text"
+        },
+        {
+          "text": "Two players are trash-talking each other in the public Discord server. It’s starting to get heated, and other members are joining in. What would you do step by step to stop the argument, and how would you make sure it doesn’t happen again later?",
+          "type": "text"
+        }
+      ]
+    },
+    {
+      "name": "Test",
+      "description": "Test",
+      "roleId": null,
+      "questions": [
+        {
+          "text": "What is your name?",
+          "type": "text"
+        },
+        {
+          "text": "Why do you want to apply for this position?",
+          "type": "text"
+        },
+        {
+          "text": "Do you have any relevant experience?",
+          "type": "yes_no"
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,230 @@
+[
+  {
+    "id": "1767728343044",
+    "userId": "928635423465537579",
+    "username": "ste4lth_100",
+    "guildId": "1456279983407370426",
+    "category": "Staff",
+    "answers": [
+      {
+        "question": "What is your name?",
+        "answer": "test"
+      },
+      {
+        "question": "How old are you?",
+        "answer": "18"
+      },
+      {
+        "question": "Why do you want to join the staff team?",
+        "answer": "test"
+      },
+      {
+        "question": "Do you have any previous staff experience?",
+        "answer": "Yes"
+      },
+      {
+        "question": "How many hours per week can you dedicate?",
+        "answer": "110"
+      }
+    ],
+    "timestamp": 1767728343044,
+    "status": "pending",
+    "reviewedBy": null,
+    "reason": null
+  },
+  {
+    "id": "1767729504246",
+    "userId": "1351918322869993563",
+    "username": "kirchoffslaw",
+    "guildId": "1456279983407370426",
+    "category": "Moderator",
+    "answers": [
+      {
+        "question": "What is your name?",
+        "answer": "Testing"
+      },
+      {
+        "question": "Why do you want to apply for this position?",
+        "answer": "Alt"
+      },
+      {
+        "question": "Do you have any relevant experience?",
+        "answer": "Yes"
+      }
+    ],
+    "timestamp": 1767729504246,
+    "status": "accepted",
+    "reviewedBy": "928635423465537579",
+    "reason": "good"
+  },
+  {
+    "id": "1767729976249",
+    "userId": "1271512898899804223",
+    "username": "sf.visuals",
+    "guildId": "1456279983407370426",
+    "category": "Moderator",
+    "answers": [
+      {
+        "question": "What is your name?",
+        "answer": "Stealth likes kids"
+      },
+      {
+        "question": "Why do you want to apply for this position?",
+        "answer": "owner"
+      },
+      {
+        "question": "Do you have any relevant experience?",
+        "answer": "Yes"
+      }
+    ],
+    "timestamp": 1767729976249,
+    "status": "pending",
+    "reviewedBy": null,
+    "reason": null
+  },
+  {
+    "id": "1767764903584",
+    "userId": "928635423465537579",
+    "username": "ste4lth_100",
+    "guildId": "1456279983407370426",
+    "category": "Test",
+    "answers": [
+      {
+        "question": "What is your name?",
+        "answer": "sup"
+      },
+      {
+        "question": "Why do you want to apply for this position?",
+        "answer": "sup"
+      },
+      {
+        "question": "Do you have any relevant experience?",
+        "answer": "Yes"
+      }
+    ],
+    "timestamp": 1767764903584,
+    "status": "accepted",
+    "reviewedBy": "905478732091895848",
+    "reason": "hi"
+  },
+  {
+    "id": "1767765258341",
+    "userId": "928635423465537579",
+    "username": "ste4lth_100",
+    "guildId": "1456279983407370426",
+    "category": "Void Staff",
+    "answers": [
+      {
+        "question": "Can you share what days and times you’re typically available to be active or help out on Discord? Please include your time zone and any specific hours that usually work best for you, so we can better schedule activities and support coverage.",
+        "answer": "test"
+      },
+      {
+        "question": "If a new member joins the Discord and starts asking how to join the team or what the rules are, how would you greet them and explain everything in a clear and friendly way?",
+        "answer": "test"
+      },
+      {
+        "question": "When you need to give a player a warning or timeout, how would you explain it in a way that feels fair and respectful instead of aggressive or rude? Do you decide whether to just delete their message, warn them, or mute/ban them? What do you think about giving second chances?",
+        "answer": "test"
+      },
+      {
+        "question": "Being a moderator means teamwork. How would you help your fellow staff members during a busy tournament when things get chaotic or confusing?",
+        "answer": "test"
+      },
+      {
+        "question": "When you need to give a player a warning or timeout, how would you explain it in a way that feels fair and respectful instead of aggressive or rude?",
+        "answer": "test"
+      },
+      {
+        "question": "Imagine another moderator made a decision you personally don’t agree with. What would you do, would you correct them in public, talk to them privately, or go to a higher staff member?",
+        "answer": "test"
+      },
+      {
+        "question": "A well-known player in your community starts breaking small rules, like spamming or talking over others in VC. You don’t want to seem harsh, but you also can’t ignore it. What’s the best way to remind them of the rules while still keeping things friendly and professional?",
+        "answer": "test"
+      },
+      {
+        "question": "Two players are trash-talking each other in the public Discord server. It’s starting to get heated, and other members are joining in. What would you do step by step to stop the argument, and how would you make sure it doesn’t happen again later?",
+        "answer": "test"
+      }
+    ],
+    "timestamp": 1767765258341,
+    "status": "denied",
+    "reviewedBy": "928635423465537579",
+    "reason": "test"
+  },
+  {
+    "id": "1767765760529",
+    "userId": "928635423465537579",
+    "username": "ste4lth_100",
+    "guildId": "1456279983407370426",
+    "category": "Test",
+    "answers": [
+      {
+        "question": "What is your name?",
+        "answer": "test"
+      },
+      {
+        "question": "Why do you want to apply for this position?",
+        "answer": "test"
+      },
+      {
+        "question": "Do you have any relevant experience?",
+        "answer": "No"
+      }
+    ],
+    "timestamp": 1767765760529,
+    "status": "accepted",
+    "reviewedBy": "928635423465537579",
+    "reason": "test"
+  },
+  {
+    "id": "1769620808198",
+    "userId": "928635423465537579",
+    "username": "ste4lth_100",
+    "guildId": "1456279983407370426",
+    "category": "Test",
+    "answers": [
+      {
+        "question": "What is your name?",
+        "answer": "1"
+      },
+      {
+        "question": "Why do you want to apply for this position?",
+        "answer": "2"
+      },
+      {
+        "question": "Do you have any relevant experience?",
+        "answer": "Yes"
+      }
+    ],
+    "timestamp": 1769620808198,
+    "status": "denied",
+    "reviewedBy": "928635423465537579",
+    "reason": "random"
+  },
+  {
+    "id": "1769793376829",
+    "userId": "928635423465537579",
+    "username": "ste4lth_100",
+    "guildId": "1456279983407370426",
+    "category": "Test",
+    "answers": [
+      {
+        "question": "What is your name?",
+        "answer": "random"
+      },
+      {
+        "question": "Why do you want to apply for this position?",
+        "answer": "random"
+      },
+      {
+        "question": "Do you have any relevant experience?",
+        "answer": "Yes"
+      }
+    ],
+    "timestamp": 1769793376829,
+    "status": "accepted",
+    "reviewedBy": "928635423465537579",
+    "reason": "random"
+  }
+]

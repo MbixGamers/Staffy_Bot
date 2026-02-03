@@ -1,0 +1,46 @@
+{
+  "guildId": "YOUR_SERVER_ID",
+  "logChannelId": "LOG_CHANNEL_ID",
+  "ticketCategoryId": "TICKET_CATEGORY_ID",
+  "adminRoleIds": ["ADMIN_ROLE_ID_1", "ADMIN_ROLE_ID_2"],
+  "cooldownHours": 24,
+  "categories": [
+    {
+      "name": "Staff",
+      "description": "Apply to become a staff member",
+      "roleId": "STAFF_ROLE_ID",
+      "questions": [
+        { "text": "What is your name?", "type": "text" },
+        { "text": "How old are you?", "type": "text" },
+        { "text": "Why do you want to join the staff team?", "type": "text" },
+        { "text": "Do you have any previous staff experience?", "type": "yes_no" },
+        { "text": "How many hours per week can you dedicate?", "type": "text" }
+      ]
+    },
+    {
+      "name": "Moderator",
+      "description": "Apply to become a moderator and help maintain the community",
+      "roleId": "MODERATOR_ROLE_ID",
+      "questions": [
+        { "text": "What is your Discord username?", "type": "text" },
+        { "text": "How long have you been in this community?", "type": "text" },
+        { "text": "Why do you want to be a moderator?", "type": "text" },
+        { "text": "Have you moderated any servers before?", "type": "yes_no" },
+        { "text": "How would you handle a heated argument between members?", "type": "text" },
+        { "text": "Can you commit to being active daily?", "type": "yes_no" }
+      ]
+    },
+    {
+      "name": "HR",
+      "description": "Join the Human Resources team",
+      "roleId": "HR_ROLE_ID",
+      "questions": [
+        { "text": "What is your full name?", "type": "text" },
+        { "text": "What experience do you have in HR or recruitment?", "type": "text" },
+        { "text": "Why are you interested in HR for this community?", "type": "text" },
+        { "text": "Are you comfortable handling sensitive information?", "type": "yes_no" },
+        { "text": "How many hours weekly can you dedicate to HR duties?", "type": "text" }
+      ]
+    }
+  ]
+}

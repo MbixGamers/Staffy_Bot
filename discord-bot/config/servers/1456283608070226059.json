@@ -1,0 +1,38 @@
+{
+  "guildId": "1456283608070226059",
+  "logChannelId": "1456918700920668306",
+  "ticketCategoryId": null,
+  "adminRoleIds": [
+    "1456678981720866928"
+  ],
+  "cooldownHours": 24,
+  "categories": [
+    {
+      "name": "Staff",
+      "description": "Apply to become a staff member",
+      "roleId": null,
+      "questions": [
+        {
+          "text": "What is your name?",
+          "type": "text"
+        },
+        {
+          "text": "How old are you?",
+          "type": "text"
+        },
+        {
+          "text": "Why do you want to join the staff team?",
+          "type": "text"
+        },
+        {
+          "text": "Do you have any previous staff experience?",
+          "type": "yes_no"
+        },
+        {
+          "text": "How many hours per week can you dedicate?",
+          "type": "text"
+        }
+      ]
+    }
+  ]
+}
