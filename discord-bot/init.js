@@ -229,6 +229,10 @@ const commands = [
         required: true
       }
     ]
+  },
+  {
+    name: 'pendingapplications',
+    description: 'List all pending applications (Admin only)'
   }
 ];
 

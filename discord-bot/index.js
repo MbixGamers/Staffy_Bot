@@ -134,7 +134,7 @@ async function handleSlashCommand(interaction) {
   const config = loadServerConfig(guildId);
   
   // Admin check for admin-only commands
-  const adminCommands = ['setup', 'addcategory', 'editquestions', 'removecategory', 'setlogchannel', 'setticketcategory', 'viewconfig', 'setcooldown', 'addadminrole', 'removeadminrole', 'addquestion', 'removequestion', 'listquestions'];
+  const adminCommands = ['setup', 'addcategory', 'editquestions', 'removecategory', 'setlogchannel', 'setticketcategory', 'viewconfig', 'setcooldown', 'addadminrole', 'removeadminrole', 'addquestion', 'removequestion', 'listquestions', 'pendingapplications'];
   if (adminCommands.includes(commandName)) {
     if (!isAdmin(member, config)) {
       return interaction.reply({ content: '❌ You need administrator permissions or an admin role to use this command.', ephemeral: true });
@@ -186,6 +186,9 @@ async function handleSlashCommand(interaction) {
       break;
     case 'listquestions':
       await handleListQuestions(interaction);
+      break;
+    case 'pendingapplications':
+      await handlePendingApplications(interaction);
       break;
   }
 }
@@ -1330,4 +1333,33 @@ async function handleEditQuestionsModal(interaction) {
   });
 }
 
-client.login(process.env.DISCORD_TOKEN);
+// Pending Applications Command
+async function handlePendingApplications(interaction) {
+  const config = loadServerConfig(interaction.guildId);
+  const applications = loadApplications(interaction.guildId);
+  const pendingApps = applications.filter(app => app.status === 'pending');
+  
+  if (pendingApps.length === 0) {
+    return interaction.reply({ content: '✅ No pending applications!', ephemeral: true });
+  }
+  
+  let listText = `**Total Pending Applications: ${pendingApps.length}**\n\n`;
+  
+  pendingApps.forEach((app, i) => {
+    const link = (app.messageId && app.channelId) ? `[Jump to Message](https://discord.com/channels/${interaction.guildId}/${app.channelId}/${app.messageId})` : 'Link unavailable';
+    listText += `${i + 1}. **${app.category}** - <@${app.userId}> (ID: \`${app.id}\`)\n   ${link}\n\n`;
+  });
+
+  // Handle potential length limits
+  if (listText.length > 4000) {
+    listText = listText.substring(0, 3900) + '\n... and more pending applications.';
+  }
+
+  const embed = new EmbedBuilder()
+    .setTitle('📋 Pending Applications')
+    .setDescription(listText)
+    .setColor('#FFA500')
+    .setTimestamp();
+    
+  await interaction.reply({ embeds: [embed], ephemeral: true });
+}
