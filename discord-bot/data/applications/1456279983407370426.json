@@ -226,5 +226,31 @@
     "status": "accepted",
     "reviewedBy": "928635423465537579",
     "reason": "random"
+  },
+  {
+    "id": "83081186",
+    "userId": "928635423465537579",
+    "userTag": "ste4lth_100",
+    "category": "Test",
+    "answers": [
+      {
+        "question": "What is your name?",
+        "answer": "demo"
+      },
+      {
+        "question": "Why do you want to apply for this position?",
+        "answer": "demo"
+      },
+      {
+        "question": "Do you have any relevant experience?",
+        "answer": "Yes"
+      }
+    ],
+    "status": "denied",
+    "timestamp": 1770183081666,
+    "messageId": "1468479019992481957",
+    "channelId": "1458181584220979414",
+    "reviewedBy": "928635423465537579",
+    "reason": "demo"
   }
 ]
