@@ -1344,6 +1344,12 @@ async function handleEditQuestionsModal(interaction) {
   });
 }
 
+// Start the bot
+client.login(process.env.DISCORD_TOKEN).catch(err => {
+  console.error('CRITICAL: Failed to login to Discord:', err);
+  process.exit(1);
+});
+
 // Pending Applications Command
 async function handlePendingApplications(interaction) {
   const config = loadServerConfig(interaction.guildId);
