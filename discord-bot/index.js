@@ -959,88 +959,88 @@ async function submitApplication(user, session) {
   const config = loadServerConfig(session.guildId);
   const applications = loadApplications(session.guildId);
   
-  const application = {
-    id: Date.now().toString(),
+  const logChannelId = config.logChannelId;
+  const logChannel = await client.guilds.cache.get(session.guildId).channels.fetch(logChannelId).catch(() => null);
+  
+  if (!logChannel) {
+    console.error('Log channel not found!');
+    return;
+  }
+
+  // Build application content
+  let appContent = `**New Application Received!**\n\n`;
+  appContent += `**Applicant:** ${user} (${user.id})\n`;
+  appContent += `**Category:** ${session.category}\n`;
+  appContent += `**Submitted:** <t:${Math.floor(Date.now() / 1000)}:R>\n\n`;
+  
+  session.answers.forEach((ans, i) => {
+    appContent += `**${i + 1}. ${ans.question}**\n${ans.answer || 'No answer'}\n\n`;
+  });
+
+  // Handle character limit (4096 for embed description)
+  const chunks = [];
+  let currentChunk = '';
+  
+  const lines = appContent.split('\n');
+  for (const line of lines) {
+    if ((currentChunk + line).length > 3900) {
+      chunks.push(currentChunk);
+      currentChunk = '';
+    }
+    currentChunk += line + '\n';
+  }
+  if (currentChunk) chunks.push(currentChunk);
+
+  const applicationId = Date.now().toString().slice(-8);
+  
+  let firstMessage = null;
+  for (let i = 0; i < chunks.length; i++) {
+    const embed = new EmbedBuilder()
+      .setTitle(`📋 ${session.category} Application - ${user.username}`)
+      .setDescription(chunks[i])
+      .setColor('#5865F2')
+      .setFooter({ text: `ID: ${applicationId}${chunks.length > 1 ? ` (Part ${i + 1}/${chunks.length})` : ''}` })
+      .setTimestamp();
+
+    const components = [];
+    if (i === chunks.length - 1) {
+      const row = new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder().setCustomId(`app_accept_${applicationId}`).setLabel('Accept').setStyle(ButtonStyle.Success).setEmoji('✅'),
+          new ButtonBuilder().setCustomId(`app_deny_${applicationId}`).setLabel('Deny').setStyle(ButtonStyle.Danger).setEmoji('❌'),
+          new ButtonBuilder().setCustomId(`app_history_${user.id}`).setLabel('History').setStyle(ButtonStyle.Secondary).setEmoji('📋'),
+          new ButtonBuilder().setCustomId(`app_ticket_${applicationId}`).setLabel('Open Ticket').setStyle(ButtonStyle.Primary).setEmoji('🎫')
+        );
+      components.push(row);
+    }
+
+    const msg = await logChannel.send({ embeds: [embed], components });
+    if (i === 0) firstMessage = msg;
+  }
+
+  // Save application
+  applications.push({
+    id: applicationId,
     userId: user.id,
-    username: user.tag,
-    guildId: session.guildId,
+    userTag: user.tag,
     category: session.category,
     answers: session.answers,
-    timestamp: Date.now(),
     status: 'pending',
-    reviewedBy: null,
-    reason: null
-  };
-  
-  applications.push(application);
+    timestamp: Date.now(),
+    messageId: firstMessage ? firstMessage.id : null,
+    channelId: logChannel.id
+  });
   saveApplications(session.guildId, applications);
   
-  // Set cooldown
+  // Update cooldown
   setCooldown(user.id, session.guildId);
-  
-  // Send to log channel
-  try {
-    const guild = client.guilds.cache.get(session.guildId);
-    const logChannel = await guild.channels.fetch(config.logChannelId);
-    
-    let answersText = '';
-    session.answers.forEach((ans, i) => {
-      answersText += `**${i + 1}. ${ans.question}**\n${ans.answer}\n\n`;
-    });
-    
-    // Split into chunks if exceeds Discord's 4096 character limit for embed description
-    const chunks = [];
-    let currentChunk = `**Applicant:** ${user.tag} (${user.id})\n**Category:** ${session.category}\n**Submitted:** <t:${Math.floor(application.timestamp / 1000)}:R>\n\n**Answers:**\n\n`;
-    
-    const lines = answersText.split('\n');
-    for (const line of lines) {
-      if ((currentChunk + line).length > 3900) {
-        chunks.push(currentChunk);
-        currentChunk = '';
-      }
-      currentChunk += line + '\n';
-    }
-    chunks.push(currentChunk);
-
-    let firstMessage = null;
-    for (let i = 0; i < chunks.length; i++) {
-      const embed = new EmbedBuilder()
-        .setTitle(`📝 ${session.category} Application - ${user.username}`)
-        .setDescription(chunks[i])
-        .setColor('#FFA500')
-        .setThumbnail(i === 0 ? user.displayAvatarURL() : null)
-        .setFooter({ text: `Application ID: ${application.id}${chunks.length > 1 ? ` (Part ${i + 1}/${chunks.length})` : ''}` });
-      
-      const components = [];
-      if (i === chunks.length - 1) {
-        const row = new ActionRowBuilder()
-          .addComponents(
-            new ButtonBuilder().setCustomId(`app_accept_${application.id}`).setLabel('Accept').setStyle(ButtonStyle.Success).setEmoji('✅'),
-            new ButtonBuilder().setCustomId(`app_deny_${application.id}`).setLabel('Deny').setStyle(ButtonStyle.Danger).setEmoji('❌'),
-            new ButtonBuilder().setCustomId(`app_history_${user.id}`).setLabel('History').setStyle(ButtonStyle.Secondary).setEmoji('📋'),
-            new ButtonBuilder().setCustomId(`app_ticket_${application.id}`).setLabel('Open Ticket').setStyle(ButtonStyle.Primary).setEmoji('🎫')
-          );
-        components.push(row);
-      }
-      
-      const msg = await logChannel.send({ embeds: [embed], components });
-      if (i === 0) firstMessage = msg;
-    }
-
-    // Update application with message link
-    application.messageId = firstMessage.id;
-    application.channelId = logChannel.id;
-    saveApplications(session.guildId, applications);
-  } catch (error) {
-    console.error('Error sending to log channel:', error);
-  }
   
   // Notify user
   const successEmbed = new EmbedBuilder()
     .setTitle('✅ Application Submitted!')
     .setDescription(`Your application for **${session.category}** has been submitted successfully!\n\nOur team will review it and get back to you soon.\n\n**Server:** ${session.guildName}`)
     .setColor('#00FF00')
-    .setFooter({ text: `Application ID: ${application.id}` })
+    .setFooter({ text: `Application ID: ${applicationId}` })
     .setTimestamp();
   
   await user.send({ embeds: [successEmbed] });
