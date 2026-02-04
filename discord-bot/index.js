@@ -988,38 +988,49 @@ async function submitApplication(user, session) {
       answersText += `**${i + 1}. ${ans.question}**\n${ans.answer}\n\n`;
     });
     
-    const embed = new EmbedBuilder()
-      .setTitle(`📝 New ${session.category} Application`)
-      .setDescription(`**Applicant:** ${user.tag} (${user.id})\n**Category:** ${session.category}\n**Submitted:** <t:${Math.floor(application.timestamp / 1000)}:R>\n\n**Answers:**\n\n${answersText}`)
-      .setColor('#FFA500')
-      .setThumbnail(user.displayAvatarURL())
-      .setFooter({ text: `Application ID: ${application.id}` });
+    // Split into chunks if exceeds Discord's 4096 character limit for embed description
+    const chunks = [];
+    let currentChunk = `**Applicant:** ${user.tag} (${user.id})\n**Category:** ${session.category}\n**Submitted:** <t:${Math.floor(application.timestamp / 1000)}:R>\n\n**Answers:**\n\n`;
     
-    const row = new ActionRowBuilder()
-      .addComponents(
-        new ButtonBuilder()
-          .setCustomId(`app_accept_${application.id}`)
-          .setLabel('Accept')
-          .setStyle(ButtonStyle.Success)
-          .setEmoji('✅'),
-        new ButtonBuilder()
-          .setCustomId(`app_deny_${application.id}`)
-          .setLabel('Deny')
-          .setStyle(ButtonStyle.Danger)
-          .setEmoji('❌'),
-        new ButtonBuilder()
-          .setCustomId(`app_history_${user.id}`)
-          .setLabel('History')
-          .setStyle(ButtonStyle.Secondary)
-          .setEmoji('📋'),
-        new ButtonBuilder()
-          .setCustomId(`app_ticket_${application.id}`)
-          .setLabel('Open Ticket')
-          .setStyle(ButtonStyle.Primary)
-          .setEmoji('🎫')
-      );
-    
-    await logChannel.send({ embeds: [embed], components: [row] });
+    const lines = answersText.split('\n');
+    for (const line of lines) {
+      if ((currentChunk + line).length > 3900) {
+        chunks.push(currentChunk);
+        currentChunk = '';
+      }
+      currentChunk += line + '\n';
+    }
+    chunks.push(currentChunk);
+
+    let firstMessage = null;
+    for (let i = 0; i < chunks.length; i++) {
+      const embed = new EmbedBuilder()
+        .setTitle(`📝 ${session.category} Application - ${user.username}`)
+        .setDescription(chunks[i])
+        .setColor('#FFA500')
+        .setThumbnail(i === 0 ? user.displayAvatarURL() : null)
+        .setFooter({ text: `Application ID: ${application.id}${chunks.length > 1 ? ` (Part ${i + 1}/${chunks.length})` : ''}` });
+      
+      const components = [];
+      if (i === chunks.length - 1) {
+        const row = new ActionRowBuilder()
+          .addComponents(
+            new ButtonBuilder().setCustomId(`app_accept_${application.id}`).setLabel('Accept').setStyle(ButtonStyle.Success).setEmoji('✅'),
+            new ButtonBuilder().setCustomId(`app_deny_${application.id}`).setLabel('Deny').setStyle(ButtonStyle.Danger).setEmoji('❌'),
+            new ButtonBuilder().setCustomId(`app_history_${user.id}`).setLabel('History').setStyle(ButtonStyle.Secondary).setEmoji('📋'),
+            new ButtonBuilder().setCustomId(`app_ticket_${application.id}`).setLabel('Open Ticket').setStyle(ButtonStyle.Primary).setEmoji('🎫')
+          );
+        components.push(row);
+      }
+      
+      const msg = await logChannel.send({ embeds: [embed], components });
+      if (i === 0) firstMessage = msg;
+    }
+
+    // Update application with message link
+    application.messageId = firstMessage.id;
+    application.channelId = logChannel.id;
+    saveApplications(session.guildId, applications);
   } catch (error) {
     console.error('Error sending to log channel:', error);
   }
