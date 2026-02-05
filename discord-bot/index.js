@@ -130,67 +130,78 @@ client.on('interactionCreate', async interaction => {
 
 // Slash Command Handler
 async function handleSlashCommand(interaction) {
-  const { commandName, guildId, member } = interaction;
-  
-  const config = loadServerConfig(guildId);
-  
-  // Admin check for admin-only commands
-  const adminCommands = ['setup', 'addcategory', 'editquestions', 'removecategory', 'setlogchannel', 'setticketcategory', 'viewconfig', 'setcooldown', 'addadminrole', 'removeadminrole', 'addquestion', 'removequestion', 'listquestions', 'pendingapplications'];
-  if (adminCommands.includes(commandName)) {
-    if (!isAdmin(member, config)) {
-      return interaction.reply({ content: '❌ You need administrator permissions or an admin role to use this command.', ephemeral: true });
+  try {
+    const { commandName, guildId, member } = interaction;
+    
+    const config = loadServerConfig(guildId);
+    
+    // Admin check for admin-only commands
+    const adminCommands = ['setup', 'addcategory', 'editquestions', 'removecategory', 'setlogchannel', 'setticketcategory', 'viewconfig', 'setcooldown', 'addadminrole', 'removeadminrole', 'addquestion', 'removequestion', 'listquestions', 'pendingapplications'];
+    if (adminCommands.includes(commandName)) {
+      if (!isAdmin(member, config)) {
+        if (!interaction.replied && !interaction.deferred) {
+          return await interaction.reply({ content: '❌ You need administrator permissions or an admin role to use this command.', ephemeral: true }).catch(() => {});
+        }
+        return;
+      }
     }
-  }
-  
-  switch (commandName) {
-    case 'help':
-      await handleHelp(interaction);
-      break;
-    case 'setup':
-      await handleSetup(interaction);
-      break;
-    case 'panel':
-      await handlePanel(interaction);
-      break;
-    case 'addcategory':
-      await handleAddCategory(interaction);
-      break;
-    case 'editquestions':
-      await handleEditQuestions(interaction);
-      break;
-    case 'removecategory':
-      await handleRemoveCategory(interaction);
-      break;
-    case 'setlogchannel':
-      await handleSetLogChannel(interaction);
-      break;
-    case 'setticketcategory':
-      await handleSetTicketCategory(interaction);
-      break;
-    case 'viewconfig':
-      await handleViewConfig(interaction);
-      break;
-    case 'setcooldown':
-      await handleSetCooldown(interaction);
-      break;
-    case 'addadminrole':
-      await handleAddAdminRole(interaction);
-      break;
-    case 'removeadminrole':
-      await handleRemoveAdminRole(interaction);
-      break;
-    case 'addquestion':
-      await handleAddQuestion(interaction);
-      break;
-    case 'removequestion':
-      await handleRemoveQuestion(interaction);
-      break;
-    case 'listquestions':
-      await handleListQuestions(interaction);
-      break;
-    case 'pendingapplications':
-      await handlePendingApplications(interaction);
-      break;
+    
+    switch (commandName) {
+      case 'help':
+        await handleHelp(interaction).catch(() => {});
+        break;
+      case 'setup':
+        await handleSetup(interaction).catch(() => {});
+        break;
+      case 'panel':
+        await handlePanel(interaction).catch(() => {});
+        break;
+      case 'addcategory':
+        await handleAddCategory(interaction).catch(() => {});
+        break;
+      case 'editquestions':
+        await handleEditQuestions(interaction).catch(() => {});
+        break;
+      case 'removecategory':
+        await handleRemoveCategory(interaction).catch(() => {});
+        break;
+      case 'setlogchannel':
+        await handleSetLogChannel(interaction).catch(() => {});
+        break;
+      case 'setticketcategory':
+        await handleSetTicketCategory(interaction).catch(() => {});
+        break;
+      case 'viewconfig':
+        await handleViewConfig(interaction).catch(() => {});
+        break;
+      case 'setcooldown':
+        await handleSetCooldown(interaction).catch(() => {});
+        break;
+      case 'addadminrole':
+        await handleAddAdminRole(interaction).catch(() => {});
+        break;
+      case 'removeadminrole':
+        await handleRemoveAdminRole(interaction).catch(() => {});
+        break;
+      case 'addquestion':
+        await handleAddQuestion(interaction).catch(() => {});
+        break;
+      case 'removequestion':
+        await handleRemoveQuestion(interaction).catch(() => {});
+        break;
+      case 'listquestions':
+        await handleListQuestions(interaction).catch(() => {});
+        break;
+      case 'pendingapplications':
+        await handlePendingApplications(interaction).catch(() => {});
+        break;
+    }
+  } catch (error) {
+    if (error.code === 10062) return; // Ignore "Unknown Interaction" as it's usually a timeout
+    console.error(`Error in handleSlashCommand (${interaction.commandName}):`, error);
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({ content: '❌ An error occurred while executing this command!', ephemeral: true }).catch(() => {});
+    }
   }
 }
 
@@ -779,13 +790,51 @@ async function handleListQuestions(interaction) {
 
 // Select Menu Handler
 async function handleSelectMenu(interaction) {
-  if (interaction.customId === 'application_select') {
-    // Acknowledge the interaction immediately to reset the selection state
-    await interaction.update({
-      components: interaction.message.components
-    });
-    
-    await handleApplicationStart(interaction);
+  try {
+    if (interaction.customId === 'application_select') {
+      // Acknowledge the interaction immediately to reset the selection state
+      await interaction.update({
+        components: interaction.message.components
+      }).catch(err => console.error('Error updating interaction:', err));
+      
+      await handleApplicationStart(interaction);
+    }
+  } catch (error) {
+    console.error('Error in handleSelectMenu:', error);
+  }
+}
+
+// Button Handler
+async function handleButton(interaction) {
+  try {
+    if (interaction.customId.startsWith('app_accept_') || interaction.customId.startsWith('app_deny_')) {
+      await handleReviewButton(interaction);
+    } else if (interaction.customId.startsWith('app_history_')) {
+      await handleHistoryButton(interaction);
+    } else if (interaction.customId.startsWith('app_ticket_')) {
+      await handleTicketButton(interaction);
+    }
+  } catch (error) {
+    console.error('Error in handleButton:', error);
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({ content: '❌ An error occurred while processing this button!', ephemeral: true }).catch(() => {});
+    }
+  }
+}
+
+// Modal Handler
+async function handleModal(interaction) {
+  try {
+    if (interaction.customId.startsWith('review_accept_') || interaction.customId.startsWith('review_deny_')) {
+      await handleReviewModal(interaction);
+    } else if (interaction.customId.startsWith('edit_questions_')) {
+      await handleEditQuestionsModal(interaction);
+    }
+  } catch (error) {
+    console.error('Error in handleModal:', error);
+    if (!interaction.replied && !interaction.deferred) {
+      await interaction.reply({ content: '❌ An error occurred while processing this modal!', ephemeral: true }).catch(() => {});
+    }
   }
 }
 
