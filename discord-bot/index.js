@@ -792,6 +792,12 @@ async function handleSelectMenu(interaction) {
 // Application Start
 async function handleApplicationStart(interaction) {
   const config = loadServerConfig(interaction.guildId);
+  if (!config) {
+    return interaction.followUp({
+      content: '❌ Server configuration not found! Please run `/setup` first.',
+      ephemeral: true
+    });
+  }
   const selectedValue = interaction.values[0];
   const categoryName = selectedValue.replace('apply_', '').replace(/_/g, ' ');
   const category = config.categories.find(cat => cat.name.toLowerCase() === categoryName.toLowerCase());
