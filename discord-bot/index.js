@@ -840,98 +840,120 @@ async function handleModal(interaction) {
 
 // Application Start
 async function handleApplicationStart(interaction) {
-  const config = loadServerConfig(interaction.guildId);
-  if (!config) {
-    return interaction.followUp({
-      content: '❌ Server configuration not found! Please run `/setup` first.',
-      ephemeral: true
-    });
-  }
-  const selectedValue = interaction.values[0];
-  const categoryName = selectedValue.replace('apply_', '').replace(/_/g, ' ');
-  const category = config.categories.find(cat => cat.name.toLowerCase() === categoryName.toLowerCase());
-  
-  if (!category) {
-    return interaction.followUp({
-      content: '❌ Application category not found!',
-      ephemeral: true
-    });
-  }
-  
-  // Check cooldown
-  const cooldownCheck = checkCooldown(interaction.user.id, interaction.guildId, config, interaction.member);
-  if (!cooldownCheck.canApply) {
-    return interaction.followUp({
-      content: `⏰ You must wait ${cooldownCheck.hoursLeft} more hour(s) before submitting another application.`,
-      ephemeral: true
-    });
-  }
-  
-  // Try to DM user
   try {
-    const dmEmbed = new EmbedBuilder()
-      .setTitle(`📝 ${category.name} Application`)
-      .setDescription(`You are about to start your application for **${category.name}**.\n\nI will ask you ${category.questions.length} questions. Please answer each one carefully.\n\n**Note:** Type your answers in this DM. Type \`cancel\` at any time to stop the application.`)
-      .setColor('#5865F2')
-      .setFooter({ text: `${interaction.guild.name}`, iconURL: interaction.guild.iconURL() });
+    const config = loadServerConfig(interaction.guildId);
+    if (!config) {
+      return interaction.followUp({
+        content: '❌ Server configuration not found! Please run `/setup` first.',
+        ephemeral: true
+      }).catch(() => {});
+    }
+    const selectedValue = interaction.values[0];
+    const categoryName = selectedValue.replace('apply_', '').replace(/_/g, ' ');
+    const category = config.categories.find(cat => cat.name.toLowerCase() === categoryName.toLowerCase());
     
-    await interaction.user.send({ embeds: [dmEmbed] });
+    if (!category) {
+      return interaction.followUp({
+        content: '❌ Application category not found!',
+        ephemeral: true
+      }).catch(() => {});
+    }
     
-    // Initialize application session
-    activeApplications.set(interaction.user.id, {
-      guildId: interaction.guildId,
-      guildName: interaction.guild.name,
-      category: category.name,
-      answers: [],
-      currentQuestion: 0,
-      questions: category.questions
-    });
+    // Check cooldown
+    const cooldownCheck = checkCooldown(interaction.user.id, interaction.guildId, config, interaction.member);
+    if (!cooldownCheck.canApply) {
+      return interaction.followUp({
+        content: `⏰ You must wait ${cooldownCheck.hoursLeft} more hour(s) before submitting another application.`,
+        ephemeral: true
+      }).catch(() => {});
+    }
     
-    // Ask first question
-    await askQuestion(interaction.user, category.questions[0], 1, category.questions.length);
-    
-    await interaction.followUp({
-      content: '✅ Check your DMs! I\'ve sent you the application questions.',
-      ephemeral: true
-    });
+    // Try to DM user
+    try {
+      const dmEmbed = new EmbedBuilder()
+        .setTitle(`📝 ${category.name} Application`)
+        .setDescription(`You are about to start your application for **${category.name}**.\n\nI will ask you ${category.questions.length} questions. Please answer each one carefully.\n\n**Note:** Type your answers in this DM. Type \`cancel\` at any time to stop the application.`)
+        .setColor('#5865F2')
+        .setFooter({ text: `${interaction.guild.name}`, iconURL: interaction.guild.iconURL() });
+      
+      await interaction.user.send({ embeds: [dmEmbed] });
+      
+      // Initialize application session
+      activeApplications.set(interaction.user.id, {
+        guildId: interaction.guildId,
+        guildName: interaction.guild.name,
+        category: category.name,
+        answers: [],
+        currentQuestion: 0,
+        questions: category.questions
+      });
+      
+      // Ask first question
+      await askQuestion(interaction.user, category.questions[0], 1, category.questions.length);
+      
+      await interaction.followUp({
+        content: '✅ Check your DMs! I\'ve sent you the application questions.',
+        ephemeral: true
+      }).catch(() => {});
+    } catch (error) {
+      if (error.code === 50007) {
+        await interaction.followUp({
+          content: '❌ I couldn\'t send you a DM. Please **enable DMs** in your privacy settings for this server and try again.',
+          ephemeral: true
+        }).catch(() => {});
+      } else {
+        throw error;
+      }
+    }
   } catch (error) {
+    if (error.code === 10062) return;
+    console.error('Error in handleApplicationStart:', error);
     await interaction.followUp({
-      content: '❌ I couldn\'t send you a DM. Please enable DMs from server members and try again.',
+      content: '❌ An error occurred while starting your application.',
       ephemeral: true
-    });
+    }).catch(() => {});
   }
 }
 
 // Ask Question
 async function askQuestion(user, question, number, total) {
-  if (question.type === 'text') {
-    const embed = new EmbedBuilder()
-      .setTitle(`Question ${number}/${total}`)
-      .setDescription(question.text)
-      .setColor('#5865F2')
-      .setFooter({ text: 'Type your answer below' });
-    
-    await user.send({ embeds: [embed] });
-  } else if (question.type === 'yes_no') {
-    const embed = new EmbedBuilder()
-      .setTitle(`Question ${number}/${total}`)
-      .setDescription(question.text)
-      .setColor('#5865F2')
-      .setFooter({ text: 'Click a button below' });
-    
-    const row = new ActionRowBuilder()
-      .addComponents(
-        new ButtonBuilder()
-          .setCustomId('answer_yes')
-          .setLabel('Yes')
-          .setStyle(ButtonStyle.Success),
-        new ButtonBuilder()
-          .setCustomId('answer_no')
-          .setLabel('No')
-          .setStyle(ButtonStyle.Danger)
-      );
-    
-    await user.send({ embeds: [embed], components: [row] });
+  try {
+    if (question.type === 'text') {
+      const embed = new EmbedBuilder()
+        .setTitle(`Question ${number}/${total}`)
+        .setDescription(question.text)
+        .setColor('#5865F2')
+        .setFooter({ text: 'Type your answer below' });
+      
+      await user.send({ embeds: [embed] });
+    } else if (question.type === 'yes_no') {
+      const embed = new EmbedBuilder()
+        .setTitle(`Question ${number}/${total}`)
+        .setDescription(question.text)
+        .setColor('#5865F2')
+        .setFooter({ text: 'Click a button below' });
+      
+      const row = new ActionRowBuilder()
+        .addComponents(
+          new ButtonBuilder()
+            .setCustomId('answer_yes')
+            .setLabel('Yes')
+            .setStyle(ButtonStyle.Success),
+          new ButtonBuilder()
+            .setCustomId('answer_no')
+            .setLabel('No')
+            .setStyle(ButtonStyle.Danger)
+        );
+      
+      await user.send({ embeds: [embed], components: [row] });
+    }
+  } catch (error) {
+    if (error.code === 50007) {
+      console.log(`Could not send DM to user ${user.id} during application (DMs closed)`);
+      activeApplications.delete(user.id);
+    } else {
+      console.error(`Error in askQuestion for user ${user.id}:`, error);
+    }
   }
 }
 
