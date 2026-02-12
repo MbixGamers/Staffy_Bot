@@ -101,9 +101,47 @@ function setCooldown(userId, guildId) {
 // Active application sessions (userId -> {guildId, category, answers, currentQuestion})
 const activeApplications = new Map();
 
-client.once('ready', () => {
+client.on('ready', () => {
   console.log(`✅ Bot is ready! Logged in as ${client.user.tag}`);
   console.log(`🔗 Invite URL: https://discord.com/api/oauth2/authorize?client_id=${process.env.CLIENT_ID}&permissions=8&scope=bot%20applications.commands`);
+});
+
+// Auto-delete application if user leaves
+client.on('guildMemberRemove', async member => {
+  try {
+    const guildId = member.guild.id;
+    const applications = loadApplications(guildId);
+    const config = loadServerConfig(guildId);
+    
+    // Find all pending applications for this user
+    const userApps = applications.filter(app => app.userId === member.id && app.status === 'pending');
+    
+    if (userApps.length > 0) {
+      console.log(`User ${member.id} left ${member.guild.name}. Cleaning up ${userApps.length} pending applications.`);
+      
+      const logChannelId = config?.logChannelId;
+      const logChannel = logChannelId ? await member.guild.channels.fetch(logChannelId).catch(() => null) : null;
+
+      for (const app of userApps) {
+        // Delete the message in the log channel if it exists
+        if (logChannel && app.messageId) {
+          try {
+            const msg = await logChannel.messages.fetch(app.messageId).catch(() => null);
+            if (msg) await msg.delete().catch(() => {});
+          } catch (e) {
+            console.error(`Failed to delete application message ${app.messageId}:`, e);
+          }
+        }
+        
+        // Mark as cancelled/deleted in data
+        app.status = 'user_left';
+      }
+      
+      saveApplications(guildId, applications);
+    }
+  } catch (error) {
+    console.error('Error in guildMemberRemove handler:', error);
+  }
 });
 
 // Error handler
@@ -1047,7 +1085,7 @@ async function submitApplication(user, session) {
 
   // Build application content
   let appContent = `**New Application Received!**\n\n`;
-  appContent += `**Applicant:** ${user} (${user.id})\n`;
+  appContent += `**Applicant:** ${user.username} (${user.id})\n`;
   appContent += `**Category:** ${session.category}\n`;
   appContent += `**Submitted:** <t:${Math.floor(Date.now() / 1000)}:R>\n\n`;
   
@@ -1442,7 +1480,9 @@ async function handlePendingApplications(interaction) {
   
   pendingApps.forEach((app, i) => {
     const link = (app.messageId && app.channelId) ? `[Jump to Message](https://discord.com/channels/${interaction.guildId}/${app.channelId}/${app.messageId})` : 'Link unavailable';
-    listText += `${i + 1}. **${app.category}** - <@${app.userId}> (ID: \`${app.id}\`)\n   ${link}\n\n`;
+    const member = interaction.guild.members.cache.get(app.userId);
+    const userDisplay = member ? `${member.user.username}` : (app.userTag || app.userId);
+    listText += `${i + 1}. **${app.category}** - ${userDisplay} (ID: \`${app.id}\`)\n   ${link}\n\n`;
   });
 
   // Handle potential length limits
