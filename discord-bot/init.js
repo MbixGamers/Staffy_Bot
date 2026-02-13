@@ -245,25 +245,6 @@ const commands = [
         required: true
       }
     ]
-  },
-  {
-    name: 'applications',
-    description: 'Application system controls (Admin only)',
-    options: [
-      {
-        name: 'closed',
-        description: 'Close or open the application system',
-        type: 1,
-        options: [
-          {
-            name: 'closed',
-            description: 'Set to true to close, false to open',
-            type: 5,
-            required: true
-          }
-        ]
-      }
-    ]
   }
 ];
 
