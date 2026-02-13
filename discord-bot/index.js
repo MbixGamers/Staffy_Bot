@@ -870,7 +870,11 @@ async function handleSelectMenu(interaction) {
     const config = loadServerConfig(guildId);
 
     if (config.applicationsClosed) {
-      return await interaction.reply({ content: 'applications are closed right now. you can apply soon.', ephemeral: true });
+      await interaction.update({
+        components: interaction.message.components
+      }).catch(err => console.error('Error updating interaction:', err));
+
+      return await interaction.followUp({ content: 'applications are closed right now. you can apply soon.', ephemeral: true });
     }
 
     if (interaction.customId === 'application_select') {
