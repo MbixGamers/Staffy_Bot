@@ -233,6 +233,18 @@ const commands = [
   {
     name: 'pendingapplications',
     description: 'List all pending applications (Admin only)'
+  },
+  {
+    name: 'close_applications',
+    description: 'Close or open application system (Admin only)',
+    options: [
+      {
+        name: 'closed',
+        description: 'Set to true to close, false to open',
+        type: 5,
+        required: true
+      }
+    ]
   }
 ];
 
