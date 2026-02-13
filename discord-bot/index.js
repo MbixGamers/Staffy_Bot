@@ -158,7 +158,7 @@ async function handleCloseApplications(interaction) {
   const config = loadServerConfig(interaction.guildId);
   if (!config) return interaction.reply({ content: '❌ Bot not setup!', ephemeral: true });
 
-  const closed = interaction.options.getBoolean('closed');
+  const closed = interaction.options.getBoolean('closed', true);
   config.applicationsClosed = closed;
   saveServerConfig(interaction.guildId, config);
 
@@ -198,7 +198,7 @@ async function handleSlashCommand(interaction) {
     const config = loadServerConfig(guildId);
     
     // Admin check for admin-only commands
-    const adminCommands = ['setup', 'addcategory', 'editquestions', 'removecategory', 'setlogchannel', 'setticketcategory', 'viewconfig', 'setcooldown', 'addadminrole', 'removeadminrole', 'addquestion', 'removequestion', 'listquestions', 'pendingapplications', 'close_applications'];
+    const adminCommands = ['setup', 'addcategory', 'editquestions', 'removecategory', 'setlogchannel', 'setticketcategory', 'viewconfig', 'setcooldown', 'addadminrole', 'removeadminrole', 'addquestion', 'removequestion', 'listquestions', 'pendingapplications', 'close_applications', 'applications'];
     if (adminCommands.includes(commandName)) {
       if (!isAdmin(member, config)) {
         if (!interaction.replied && !interaction.deferred) {
@@ -214,6 +214,11 @@ async function handleSlashCommand(interaction) {
         break;
       case 'close_applications':
         await handleCloseApplications(interaction).catch(() => {});
+        break;
+      case 'applications':
+        if (interaction.options.getSubcommand() === 'closed') {
+          await handleCloseApplications(interaction).catch(() => {});
+        }
         break;
       case 'setup':
         await handleSetup(interaction).catch(() => {});
