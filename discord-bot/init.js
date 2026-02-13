@@ -248,11 +248,22 @@ const commands = [
   }
 ];
 
+const REQUIRED_GLOBAL_COMMANDS = ['close_applications'];
+
+for (const commandName of REQUIRED_GLOBAL_COMMANDS) {
+  const commandExists = commands.some((command) => command.name === commandName);
+
+  if (!commandExists) {
+    throw new Error(`Missing required global command in REST payload: /${commandName}`);
+  }
+}
+
 const rest = new REST({ version: '10' }).setToken(process.env.DISCORD_TOKEN);
 
 (async () => {
   try {
     console.log('Started refreshing application (/) commands.');
+    console.log(`Registering global commands: ${commands.map((command) => `/${command.name}`).join(', ')}`);
 
     await rest.put(
       Routes.applicationCommands(process.env.CLIENT_ID),
