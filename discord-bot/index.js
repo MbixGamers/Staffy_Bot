@@ -158,7 +158,7 @@ async function handleCloseApplications(interaction) {
   const config = loadServerConfig(interaction.guildId);
   if (!config) return interaction.reply({ content: '❌ Bot not setup!', ephemeral: true });
 
-  const closed = interaction.options.getBoolean('closed', true);
+  const closed = interaction.options.getBoolean('closed');
   config.applicationsClosed = closed;
   saveServerConfig(interaction.guildId, config);
 
@@ -198,7 +198,7 @@ async function handleSlashCommand(interaction) {
     const config = loadServerConfig(guildId);
     
     // Admin check for admin-only commands
-    const adminCommands = ['setup', 'addcategory', 'editquestions', 'removecategory', 'setlogchannel', 'setticketcategory', 'viewconfig', 'setcooldown', 'addadminrole', 'removeadminrole', 'addquestion', 'removequestion', 'listquestions', 'pendingapplications', 'close_applications', 'applications'];
+    const adminCommands = ['setup', 'addcategory', 'editquestions', 'removecategory', 'setlogchannel', 'setticketcategory', 'viewconfig', 'setcooldown', 'addadminrole', 'removeadminrole', 'addquestion', 'removequestion', 'listquestions', 'pendingapplications', 'close_applications'];
     if (adminCommands.includes(commandName)) {
       if (!isAdmin(member, config)) {
         if (!interaction.replied && !interaction.deferred) {
@@ -214,11 +214,6 @@ async function handleSlashCommand(interaction) {
         break;
       case 'close_applications':
         await handleCloseApplications(interaction).catch(() => {});
-        break;
-      case 'applications':
-        if (interaction.options.getSubcommand() === 'closed') {
-          await handleCloseApplications(interaction).catch(() => {});
-        }
         break;
       case 'setup':
         await handleSetup(interaction).catch(() => {});
@@ -873,25 +868,16 @@ async function handleSelectMenu(interaction) {
   try {
     const guildId = interaction.guildId;
     const config = loadServerConfig(guildId);
-
-    const resetSelection = async () => {
-      await interaction.update({
-        components: interaction.message.components
-      }).catch(err => console.error('Error updating interaction:', err));
-    };
     
     if (config.applicationsClosed) {
-      if (interaction.customId === 'application_select') {
-        await resetSelection();
-        return await interaction.followUp({ content: 'applications are closed right now. you can apply soon.', ephemeral: true }).catch(() => {});
-      }
-
       return await interaction.reply({ content: 'applications are closed right now. you can apply soon.', ephemeral: true });
     }
     
     if (interaction.customId === 'application_select') {
       // Acknowledge the interaction immediately to reset the selection state
-      await resetSelection();
+      await interaction.update({
+        components: interaction.message.components
+      }).catch(err => console.error('Error updating interaction:', err));
       
       await handleApplicationStart(interaction);
     }
