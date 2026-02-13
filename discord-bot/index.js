@@ -868,16 +868,25 @@ async function handleSelectMenu(interaction) {
   try {
     const guildId = interaction.guildId;
     const config = loadServerConfig(guildId);
+
+    const resetSelection = async () => {
+      await interaction.update({
+        components: interaction.message.components
+      }).catch(err => console.error('Error updating interaction:', err));
+    };
     
     if (config.applicationsClosed) {
+      if (interaction.customId === 'application_select') {
+        await resetSelection();
+        return await interaction.followUp({ content: 'applications are closed right now. you can apply soon.', ephemeral: true }).catch(() => {});
+      }
+
       return await interaction.reply({ content: 'applications are closed right now. you can apply soon.', ephemeral: true });
     }
     
     if (interaction.customId === 'application_select') {
       // Acknowledge the interaction immediately to reset the selection state
-      await interaction.update({
-        components: interaction.message.components
-      }).catch(err => console.error('Error updating interaction:', err));
+      await resetSelection();
       
       await handleApplicationStart(interaction);
     }
