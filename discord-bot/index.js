@@ -133,6 +133,16 @@ client.on('guildMemberRemove', async member => {
           }
         }
         
+        // Delete ticket channel if it exists
+        if (app.ticketChannelId) {
+          try {
+            const ticketChannel = await member.guild.channels.fetch(app.ticketChannelId).catch(() => null);
+            if (ticketChannel) await ticketChannel.delete().catch(() => {});
+          } catch (e) {
+            console.error(`Failed to delete ticket channel ${app.ticketChannelId}:`, e);
+          }
+        }
+        
         // Mark as cancelled/deleted in data
         app.status = 'user_left';
       }
@@ -143,6 +153,20 @@ client.on('guildMemberRemove', async member => {
     console.error('Error in guildMemberRemove handler:', error);
   }
 });
+
+async function handleCloseApplications(interaction) {
+  const config = loadServerConfig(interaction.guildId);
+  if (!config) return interaction.reply({ content: '❌ Bot not setup!', ephemeral: true });
+
+  const closed = interaction.options.getBoolean('closed');
+  config.applicationsClosed = closed;
+  saveServerConfig(interaction.guildId, config);
+
+  await interaction.reply({ 
+    content: `✅ Applications are now ${closed ? 'CLOSED' : 'OPEN'}.`, 
+    ephemeral: true 
+  });
+}
 
 // Error handler
 client.on('error', error => {
@@ -174,7 +198,7 @@ async function handleSlashCommand(interaction) {
     const config = loadServerConfig(guildId);
     
     // Admin check for admin-only commands
-    const adminCommands = ['setup', 'addcategory', 'editquestions', 'removecategory', 'setlogchannel', 'setticketcategory', 'viewconfig', 'setcooldown', 'addadminrole', 'removeadminrole', 'addquestion', 'removequestion', 'listquestions', 'pendingapplications'];
+    const adminCommands = ['setup', 'addcategory', 'editquestions', 'removecategory', 'setlogchannel', 'setticketcategory', 'viewconfig', 'setcooldown', 'addadminrole', 'removeadminrole', 'addquestion', 'removequestion', 'listquestions', 'pendingapplications', 'close_applications'];
     if (adminCommands.includes(commandName)) {
       if (!isAdmin(member, config)) {
         if (!interaction.replied && !interaction.deferred) {
@@ -187,6 +211,9 @@ async function handleSlashCommand(interaction) {
     switch (commandName) {
       case 'help':
         await handleHelp(interaction).catch(() => {});
+        break;
+      case 'close_applications':
+        await handleCloseApplications(interaction).catch(() => {});
         break;
       case 'setup':
         await handleSetup(interaction).catch(() => {});
@@ -359,34 +386,44 @@ async function handlePanel(interaction) {
     const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
     
     // Build embed description
-    let description = '**Welcome to our Application System!**\n\nSelect the type of application you wish to submit from the dropdown menu below.\n\n**Available Positions:**\n\n';
+    let description = config.applicationsClosed 
+      ? 'applications closed right now you can apply soon' 
+      : '**Welcome to our Application System!**\n\nSelect the type of application you wish to submit from the dropdown menu below.\n\n**Available Positions:**\n\n';
     
-    config.categories.forEach((cat, index) => {
-      description += `**${index + 1}. ${cat.name}**\n${cat.description}\n\n`;
-    });
+    if (!config.applicationsClosed) {
+      config.categories.forEach((cat, index) => {
+        description += `**${index + 1}. ${cat.name}**\n${cat.description}\n\n`;
+      });
+    }
     
     const embed = new EmbedBuilder()
       .setTitle('📋 Application Panel')
       .setDescription(description)
       .setColor('#5865F2')
-      .setFooter({ text: 'Select an option below to begin your application' })
+      .setFooter({ text: config.applicationsClosed ? 'Applications Closed' : 'Select an option below to begin your application' })
       .setTimestamp();
     
     // Build select menu
-    const options = config.categories.map(cat => ({
-      label: cat.name,
-      description: cat.description.substring(0, 100),
-      value: `apply_${cat.name.toLowerCase().replace(/\s+/g, '_')}`
-    }));
+    const row = new ActionRowBuilder();
+    if (!config.applicationsClosed) {
+      const options = config.categories.map(cat => ({
+        label: cat.name,
+        description: cat.description.substring(0, 100),
+        value: `apply_${cat.name.toLowerCase().replace(/\s+/g, '_')}`
+      }));
+      
+      const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId('application_select')
+        .setPlaceholder('Choose an application type...')
+        .addOptions(options);
+      
+      row.addComponents(selectMenu);
+    }
     
-    const selectMenu = new StringSelectMenuBuilder()
-      .setCustomId('application_select')
-      .setPlaceholder('Choose an application type...')
-      .addOptions(options);
-    
-    const row = new ActionRowBuilder().addComponents(selectMenu);
-    
-    await targetChannel.send({ embeds: [embed], components: [row] });
+    await targetChannel.send({ 
+      embeds: [embed], 
+      components: !config.applicationsClosed ? [row] : [] 
+    });
     
     await interaction.editReply({
       content: `✅ Application panel deployed in ${targetChannel}!`
@@ -829,6 +866,13 @@ async function handleListQuestions(interaction) {
 // Select Menu Handler
 async function handleSelectMenu(interaction) {
   try {
+    const guildId = interaction.guildId;
+    const config = loadServerConfig(guildId);
+    
+    if (config.applicationsClosed) {
+      return await interaction.reply({ content: 'applications are closed right now. you can apply soon.', ephemeral: true });
+    }
+    
     if (interaction.customId === 'application_select') {
       // Acknowledge the interaction immediately to reset the selection state
       await interaction.update({
@@ -1085,7 +1129,7 @@ async function submitApplication(user, session) {
 
   // Build application content
   let appContent = `**New Application Received!**\n\n`;
-  appContent += `**Applicant:** ${user.username} (${user.id})\n`;
+  appContent += `**Applicant:** <@${user.id}> (${user.id})\n`;
   appContent += `**Category:** ${session.category}\n`;
   appContent += `**Submitted:** <t:${Math.floor(Date.now() / 1000)}:R>\n\n`;
   
@@ -1291,11 +1335,11 @@ async function handleTicketButton(interaction) {
         },
         {
           id: user.id,
-          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]
+          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory]
         },
         ...config.adminRoleIds.map(roleId => ({
           id: roleId,
-          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]
+          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory]
         }))
       ]
     });
