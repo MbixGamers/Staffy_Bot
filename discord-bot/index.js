@@ -279,7 +279,7 @@ async function handleHelp(interaction) {
     .addFields(
       {
         name: '🔧 Setup Commands (Admin Only)',
-        value: '`/setup` - Initial bot configuration\n`/addadminrole` - Add additional admin roles\n`/removeadminrole` - Remove an admin role\n`/setlogchannel` - Change log channel\n`/setticketcategory` - Set ticket category\n`/setcooldown` - Adjust application cooldown',
+        value: '`/setup` - Initial bot configuration\n`/addadminrole` - Add additional admin roles\n`/removeadminrole` - Remove an admin role\n`/setlogchannel` - Change log channel\n`/setticketcategory` - Set ticket category\n`/setcooldown` - Adjust application cooldown\n`/close_applications` - Close/open the application system\n`/pendingapplications` - List pending applications',
         inline: false
       },
       {
