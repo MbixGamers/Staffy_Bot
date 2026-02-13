@@ -74,21 +74,21 @@ function isAdmin(member, config) {
 
 function checkCooldown(userId, guildId, config, member) {
   if (member && member.permissions.has(PermissionFlagsBits.Administrator)) return { canApply: true };
-  
+
   const cooldowns = loadCooldowns(guildId);
   if (!cooldowns[userId]) return { canApply: true };
-  
+
   const lastApplication = cooldowns[userId];
   const cooldownHours = config.cooldownHours || 24;
   const cooldownMs = cooldownHours * 60 * 60 * 1000;
   const timePassed = Date.now() - lastApplication;
-  
+
   if (timePassed < cooldownMs) {
     const timeLeft = cooldownMs - timePassed;
     const hoursLeft = Math.ceil(timeLeft / (60 * 60 * 1000));
     return { canApply: false, hoursLeft };
   }
-  
+
   return { canApply: true };
 }
 
@@ -112,13 +112,13 @@ client.on('guildMemberRemove', async member => {
     const guildId = member.guild.id;
     const applications = loadApplications(guildId);
     const config = loadServerConfig(guildId);
-    
+
     // Find all pending applications for this user
     const userApps = applications.filter(app => app.userId === member.id && app.status === 'pending');
-    
+
     if (userApps.length > 0) {
       console.log(`User ${member.id} left ${member.guild.name}. Cleaning up ${userApps.length} pending applications.`);
-      
+
       const logChannelId = config?.logChannelId;
       const logChannel = logChannelId ? await member.guild.channels.fetch(logChannelId).catch(() => null) : null;
 
@@ -132,17 +132,41 @@ client.on('guildMemberRemove', async member => {
             console.error(`Failed to delete application message ${app.messageId}:`, e);
           }
         }
-        
+
+        // Delete ticket channel if it exists
+        if (app.ticketChannelId) {
+          try {
+            const ticketChannel = await member.guild.channels.fetch(app.ticketChannelId).catch(() => null);
+            if (ticketChannel) await ticketChannel.delete().catch(() => {});
+          } catch (e) {
+            console.error(`Failed to delete ticket channel ${app.ticketChannelId}:`, e);
+          }
+        }
+
         // Mark as cancelled/deleted in data
         app.status = 'user_left';
       }
-      
+
       saveApplications(guildId, applications);
     }
   } catch (error) {
     console.error('Error in guildMemberRemove handler:', error);
   }
 });
+
+async function handleCloseApplications(interaction) {
+  const config = loadServerConfig(interaction.guildId);
+  if (!config) return interaction.reply({ content: '❌ Bot not setup!', ephemeral: true });
+
+  const closed = interaction.options.getBoolean('closed');
+  config.applicationsClosed = closed;
+  saveServerConfig(interaction.guildId, config);
+
+  await interaction.reply({ 
+    content: `✅ Applications are now ${closed ? 'CLOSED' : 'OPEN'}.`, 
+    ephemeral: true 
+  });
+}
 
 // Error handler
 client.on('error', error => {
@@ -170,11 +194,11 @@ client.on('interactionCreate', async interaction => {
 async function handleSlashCommand(interaction) {
   try {
     const { commandName, guildId, member } = interaction;
-    
+
     const config = loadServerConfig(guildId);
-    
+
     // Admin check for admin-only commands
-    const adminCommands = ['setup', 'addcategory', 'editquestions', 'removecategory', 'setlogchannel', 'setticketcategory', 'viewconfig', 'setcooldown', 'addadminrole', 'removeadminrole', 'addquestion', 'removequestion', 'listquestions', 'pendingapplications'];
+    const adminCommands = ['setup', 'addcategory', 'editquestions', 'removecategory', 'setlogchannel', 'setticketcategory', 'viewconfig', 'setcooldown', 'addadminrole', 'removeadminrole', 'addquestion', 'removequestion', 'listquestions', 'pendingapplications', 'close_applications'];
     if (adminCommands.includes(commandName)) {
       if (!isAdmin(member, config)) {
         if (!interaction.replied && !interaction.deferred) {
@@ -183,10 +207,13 @@ async function handleSlashCommand(interaction) {
         return;
       }
     }
-    
+
     switch (commandName) {
       case 'help':
         await handleHelp(interaction).catch(() => {});
+        break;
+      case 'close_applications':
+        await handleCloseApplications(interaction).catch(() => {});
         break;
       case 'setup':
         await handleSetup(interaction).catch(() => {});
@@ -296,10 +323,10 @@ async function handleHelp(interaction) {
 async function handleSetup(interaction) {
   try {
     await interaction.deferReply({ ephemeral: true });
-    
+
     const logChannel = interaction.options.getChannel('log_channel');
     const adminRole = interaction.options.getRole('admin_role');
-    
+
     const defaultConfig = {
       guildId: interaction.guildId,
       logChannelId: logChannel.id,
@@ -321,9 +348,9 @@ async function handleSetup(interaction) {
         }
       ]
     };
-    
+
     saveServerConfig(interaction.guildId, defaultConfig);
-    
+
     await interaction.editReply({
       content: `✅ **Bot Setup Complete!**\n\n📋 Log Channel: ${logChannel}\n👑 Admin Role: ${adminRole}\n⏰ Cooldown: 24 hours\n📝 Default Category: Staff\n\nUse \`/panel\` to deploy the application panel!`
     });
@@ -341,53 +368,63 @@ async function handleSetup(interaction) {
 async function handlePanel(interaction) {
   try {
     await interaction.deferReply({ ephemeral: true });
-    
+
     const config = loadServerConfig(interaction.guildId);
-    
+
     if (!config) {
       return interaction.editReply({
         content: '❌ Please run `/setup` first to configure the bot!'
       });
     }
-    
+
     if (config.categories.length === 0) {
       return interaction.editReply({
         content: '❌ No application categories configured. Use `/addcategory` to add one!'
       });
     }
-    
+
     const targetChannel = interaction.options.getChannel('channel') || interaction.channel;
-    
+
     // Build embed description
-    let description = '**Welcome to our Application System!**\n\nSelect the type of application you wish to submit from the dropdown menu below.\n\n**Available Positions:**\n\n';
-    
-    config.categories.forEach((cat, index) => {
-      description += `**${index + 1}. ${cat.name}**\n${cat.description}\n\n`;
-    });
-    
+    let description = config.applicationsClosed 
+      ? 'applications closed right now you can apply soon' 
+      : '**Welcome to our Application System!**\n\nSelect the type of application you wish to submit from the dropdown menu below.\n\n**Available Positions:**\n\n';
+
+    if (!config.applicationsClosed) {
+      config.categories.forEach((cat, index) => {
+        description += `**${index + 1}. ${cat.name}**\n${cat.description}\n\n`;
+      });
+    }
+
     const embed = new EmbedBuilder()
       .setTitle('📋 Application Panel')
       .setDescription(description)
       .setColor('#5865F2')
-      .setFooter({ text: 'Select an option below to begin your application' })
+      .setFooter({ text: config.applicationsClosed ? 'Applications Closed' : 'Select an option below to begin your application' })
       .setTimestamp();
-    
+
     // Build select menu
-    const options = config.categories.map(cat => ({
-      label: cat.name,
-      description: cat.description.substring(0, 100),
-      value: `apply_${cat.name.toLowerCase().replace(/\s+/g, '_')}`
-    }));
-    
-    const selectMenu = new StringSelectMenuBuilder()
-      .setCustomId('application_select')
-      .setPlaceholder('Choose an application type...')
-      .addOptions(options);
-    
-    const row = new ActionRowBuilder().addComponents(selectMenu);
-    
-    await targetChannel.send({ embeds: [embed], components: [row] });
-    
+    const row = new ActionRowBuilder();
+    if (!config.applicationsClosed) {
+      const options = config.categories.map(cat => ({
+        label: cat.name,
+        description: cat.description.substring(0, 100),
+        value: `apply_${cat.name.toLowerCase().replace(/\s+/g, '_')}`
+      }));
+
+      const selectMenu = new StringSelectMenuBuilder()
+        .setCustomId('application_select')
+        .setPlaceholder('Choose an application type...')
+        .addOptions(options);
+
+      row.addComponents(selectMenu);
+    }
+
+    await targetChannel.send({ 
+      embeds: [embed], 
+      components: !config.applicationsClosed ? [row] : [] 
+    });
+
     await interaction.editReply({
       content: `✅ Application panel deployed in ${targetChannel}!`
     });
@@ -404,14 +441,14 @@ async function handlePanel(interaction) {
 // Add Category Command
 async function handleAddCategory(interaction) {
   const config = loadServerConfig(interaction.guildId);
-  
+
   if (!config) {
     return interaction.reply({
       content: '❌ Please run `/setup` first!',
       ephemeral: true
     });
   }
-  
+
   const name = interaction.options.getString('name');
   const description = interaction.options.getString('description');
   const roles = [
@@ -420,7 +457,7 @@ async function handleAddCategory(interaction) {
     interaction.options.getRole('role3'),
     interaction.options.getRole('role4')
   ].filter(r => r !== null);
-  
+
   // Check if category already exists
   if (config.categories.some(cat => cat.name.toLowerCase() === name.toLowerCase())) {
     return interaction.reply({
@@ -428,7 +465,7 @@ async function handleAddCategory(interaction) {
       ephemeral: true
     });
   }
-  
+
   const newCategory = {
     name,
     description,
@@ -439,10 +476,10 @@ async function handleAddCategory(interaction) {
       { text: 'Do you have any relevant experience?', type: 'yes_no' }
     ]
   };
-  
+
   config.categories.push(newCategory);
   saveServerConfig(interaction.guildId, config);
-  
+
   await interaction.reply({
     content: `✅ Category "${name}" added successfully!\n${roles.length > 0 ? `🎭 Auto-roles: ${roles.join(', ')}` : ''}\n\n💡 Use \`/editquestions category:${name}\` to customize the questions.`,
     ephemeral: true
@@ -452,28 +489,28 @@ async function handleAddCategory(interaction) {
 // Edit Questions Command
 async function handleEditQuestions(interaction) {
   const config = loadServerConfig(interaction.guildId);
-  
+
   if (!config) {
     return interaction.reply({
       content: '❌ Please run `/setup` first!',
       ephemeral: true
     });
   }
-  
+
   const categoryName = interaction.options.getString('category');
   const category = config.categories.find(cat => cat.name.toLowerCase() === categoryName.toLowerCase());
-  
+
   if (!category) {
     return interaction.reply({
       content: `❌ Category "${categoryName}" not found!`,
       ephemeral: true
     });
   }
-  
+
   const modal = new ModalBuilder()
     .setCustomId(`edit_questions_${categoryName}`)
     .setTitle(`Edit Questions: ${categoryName}`);
-  
+
   // Show first 5 questions in modal
   for (let i = 0; i < Math.min(5, category.questions.length); i++) {
     const input = new TextInputBuilder()
@@ -482,37 +519,37 @@ async function handleEditQuestions(interaction) {
       .setStyle(TextInputStyle.Short)
       .setValue(category.questions[i].text)
       .setRequired(false);
-    
+
     modal.addComponents(new ActionRowBuilder().addComponents(input));
   }
-  
+
   await interaction.showModal(modal);
 }
 
 // Remove Category Command
 async function handleRemoveCategory(interaction) {
   const config = loadServerConfig(interaction.guildId);
-  
+
   if (!config) {
     return interaction.reply({
       content: '❌ Please run `/setup` first!',
       ephemeral: true
     });
   }
-  
+
   const categoryName = interaction.options.getString('category');
   const index = config.categories.findIndex(cat => cat.name.toLowerCase() === categoryName.toLowerCase());
-  
+
   if (index === -1) {
     return interaction.reply({
       content: `❌ Category "${categoryName}" not found!`,
       ephemeral: true
     });
   }
-  
+
   config.categories.splice(index, 1);
   saveServerConfig(interaction.guildId, config);
-  
+
   await interaction.reply({
     content: `✅ Category "${categoryName}" removed successfully!`,
     ephemeral: true
@@ -522,18 +559,18 @@ async function handleRemoveCategory(interaction) {
 // Set Log Channel Command
 async function handleSetLogChannel(interaction) {
   const config = loadServerConfig(interaction.guildId);
-  
+
   if (!config) {
     return interaction.reply({
       content: '❌ Please run `/setup` first!',
       ephemeral: true
     });
   }
-  
+
   const channel = interaction.options.getChannel('channel');
   config.logChannelId = channel.id;
   saveServerConfig(interaction.guildId, config);
-  
+
   await interaction.reply({
     content: `✅ Log channel set to ${channel}!`,
     ephemeral: true
@@ -543,26 +580,26 @@ async function handleSetLogChannel(interaction) {
 // Set Ticket Category Command
 async function handleSetTicketCategory(interaction) {
   const config = loadServerConfig(interaction.guildId);
-  
+
   if (!config) {
     return interaction.reply({
       content: '❌ Please run `/setup` first!',
       ephemeral: true
     });
   }
-  
+
   const category = interaction.options.getChannel('category');
-  
+
   if (category.type !== ChannelType.GuildCategory) {
     return interaction.reply({
       content: '❌ Please select a category channel!',
       ephemeral: true
     });
   }
-  
+
   config.ticketCategoryId = category.id;
   saveServerConfig(interaction.guildId, config);
-  
+
   await interaction.reply({
     content: `✅ Ticket category set to ${category.name}!`,
     ephemeral: true
@@ -572,31 +609,31 @@ async function handleSetTicketCategory(interaction) {
 // View Config Command
 async function handleViewConfig(interaction) {
   const config = loadServerConfig(interaction.guildId);
-  
+
   if (!config) {
     return interaction.reply({
       content: '❌ Please run `/setup` first!',
       ephemeral: true
     });
   }
-  
+
   const logChannel = await interaction.guild.channels.fetch(config.logChannelId).catch(() => null);
   const ticketCategory = config.ticketCategoryId ? await interaction.guild.channels.fetch(config.ticketCategoryId).catch(() => null) : null;
-  
+
   let configText = `**Server Configuration**\n\n`;
   configText += `📋 **Log Channel:** ${logChannel || 'Not set'}\n`;
   configText += `🎫 **Ticket Category:** ${ticketCategory ? ticketCategory.name : 'Not set'}\n`;
   configText += `⏰ **Cooldown:** ${config.cooldownHours} hours\n`;
   configText += `👑 **Admin Roles:** ${config.adminRoleIds.map(id => `<@&${id}>`).join(', ')}\n\n`;
   configText += `**Application Categories:** (${config.categories.length})\n\n`;
-  
+
   config.categories.forEach(cat => {
     configText += `**• ${cat.name}**\n`;
     configText += `  Description: ${cat.description}\n`;
     configText += `  Auto-role: ${cat.roleId ? `<@&${cat.roleId}>` : 'None'}\n`;
     configText += `  Questions: ${cat.questions.length}\n\n`;
   });
-  
+
   await interaction.reply({
     content: configText,
     ephemeral: true
@@ -606,26 +643,26 @@ async function handleViewConfig(interaction) {
 // Set Cooldown Command
 async function handleSetCooldown(interaction) {
   const config = loadServerConfig(interaction.guildId);
-  
+
   if (!config) {
     return interaction.reply({
       content: '❌ Please run `/setup` first!',
       ephemeral: true
     });
   }
-  
+
   const hours = interaction.options.getInteger('hours');
-  
+
   if (hours < 0 || hours > 168) {
     return interaction.reply({
       content: '❌ Cooldown must be between 0 and 168 hours (1 week)!',
       ephemeral: true
     });
   }
-  
+
   config.cooldownHours = hours;
   saveServerConfig(interaction.guildId, config);
-  
+
   await interaction.reply({
     content: `✅ Application cooldown set to ${hours} hours!`,
     ephemeral: true
@@ -635,26 +672,26 @@ async function handleSetCooldown(interaction) {
 // Add Admin Role Command
 async function handleAddAdminRole(interaction) {
   const config = loadServerConfig(interaction.guildId);
-  
+
   if (!config) {
     return interaction.reply({
       content: '❌ Please run `/setup` first!',
       ephemeral: true
     });
   }
-  
+
   const role = interaction.options.getRole('role');
-  
+
   if (config.adminRoleIds.includes(role.id)) {
     return interaction.reply({
       content: `❌ ${role} is already an admin role!`,
       ephemeral: true
     });
   }
-  
+
   config.adminRoleIds.push(role.id);
   saveServerConfig(interaction.guildId, config);
-  
+
   await interaction.reply({
     content: `✅ ${role} added as admin role! Total admin roles: ${config.adminRoleIds.length}`,
     ephemeral: true
@@ -664,33 +701,33 @@ async function handleAddAdminRole(interaction) {
 // Remove Admin Role Command
 async function handleRemoveAdminRole(interaction) {
   const config = loadServerConfig(interaction.guildId);
-  
+
   if (!config) {
     return interaction.reply({
       content: '❌ Please run `/setup` first!',
       ephemeral: true
     });
   }
-  
+
   const role = interaction.options.getRole('role');
-  
+
   if (!config.adminRoleIds.includes(role.id)) {
     return interaction.reply({
       content: `❌ ${role} is not an admin role!`,
       ephemeral: true
     });
   }
-  
+
   if (config.adminRoleIds.length === 1) {
     return interaction.reply({
       content: '❌ Cannot remove the last admin role! Add another admin role first.',
       ephemeral: true
     });
   }
-  
+
   config.adminRoleIds = config.adminRoleIds.filter(id => id !== role.id);
   saveServerConfig(interaction.guildId, config);
-  
+
   await interaction.reply({
     content: `✅ ${role} removed from admin roles! Remaining admin roles: ${config.adminRoleIds.length}`,
     ephemeral: true
@@ -700,41 +737,41 @@ async function handleRemoveAdminRole(interaction) {
 // Add Question Command
 async function handleAddQuestion(interaction) {
   const config = loadServerConfig(interaction.guildId);
-  
+
   if (!config) {
     return interaction.reply({
       content: '❌ Please run `/setup` first!',
       ephemeral: true
     });
   }
-  
+
   const categoryName = interaction.options.getString('category');
   const questionText = interaction.options.getString('question');
   const questionType = interaction.options.getString('type');
-  
+
   const category = config.categories.find(cat => cat.name.toLowerCase() === categoryName.toLowerCase());
-  
+
   if (!category) {
     return interaction.reply({
       content: `❌ Category "${categoryName}" not found!`,
       ephemeral: true
     });
   }
-  
+
   if (category.questions.length >= 20) {
     return interaction.reply({
       content: `❌ Maximum 20 questions per category! Category "${categoryName}" already has 20 questions.`,
       ephemeral: true
     });
   }
-  
+
   category.questions.push({
     text: questionText,
     type: questionType
   });
-  
+
   saveServerConfig(interaction.guildId, config);
-  
+
   await interaction.reply({
     content: `✅ Question added to "${categoryName}"!\n\n**Question ${category.questions.length}:** ${questionText}\n**Type:** ${questionType === 'text' ? 'Text (Paragraph)' : 'Yes/No (Buttons)'}\n\nTotal questions: ${category.questions.length}/20`,
     ephemeral: true
@@ -744,38 +781,38 @@ async function handleAddQuestion(interaction) {
 // Remove Question Command
 async function handleRemoveQuestion(interaction) {
   const config = loadServerConfig(interaction.guildId);
-  
+
   if (!config) {
     return interaction.reply({
       content: '❌ Please run `/setup` first!',
       ephemeral: true
     });
   }
-  
+
   const categoryName = interaction.options.getString('category');
   const questionNumber = interaction.options.getInteger('question_number');
-  
+
   const category = config.categories.find(cat => cat.name.toLowerCase() === categoryName.toLowerCase());
-  
+
   if (!category) {
     return interaction.reply({
       content: `❌ Category "${categoryName}" not found!`,
       ephemeral: true
     });
   }
-  
+
   if (questionNumber < 1 || questionNumber > category.questions.length) {
     return interaction.reply({
       content: `❌ Invalid question number! Category "${categoryName}" has ${category.questions.length} question(s).`,
       ephemeral: true
     });
   }
-  
+
   const removedQuestion = category.questions[questionNumber - 1];
   category.questions.splice(questionNumber - 1, 1);
-  
+
   saveServerConfig(interaction.guildId, config);
-  
+
   await interaction.reply({
     content: `✅ Question ${questionNumber} removed from "${categoryName}"!\n\n**Removed:** ${removedQuestion.text}\n\nRemaining questions: ${category.questions.length}`,
     ephemeral: true
@@ -785,56 +822,63 @@ async function handleRemoveQuestion(interaction) {
 // List Questions Command
 async function handleListQuestions(interaction) {
   const config = loadServerConfig(interaction.guildId);
-  
+
   if (!config) {
     return interaction.reply({
       content: '❌ Please run `/setup` first!',
       ephemeral: true
     });
   }
-  
+
   const categoryName = interaction.options.getString('category');
   const category = config.categories.find(cat => cat.name.toLowerCase() === categoryName.toLowerCase());
-  
+
   if (!category) {
     return interaction.reply({
       content: `❌ Category "${categoryName}" not found!`,
       ephemeral: true
     });
   }
-  
+
   if (category.questions.length === 0) {
     return interaction.reply({
       content: `📝 Category "${categoryName}" has no questions yet.\n\nUse \`/addquestion category:${categoryName}\` to add questions!`,
       ephemeral: true
     });
   }
-  
+
   let questionsList = `**Questions for "${categoryName}"** (${category.questions.length}/20)\n\n`;
-  
+
   category.questions.forEach((q, i) => {
     const typeEmoji = q.type === 'text' ? '📝' : '✅';
     questionsList += `${i + 1}. ${typeEmoji} ${q.text}\n`;
   });
-  
+
   const embed = new EmbedBuilder()
     .setTitle(`❓ ${categoryName} - Questions`)
     .setDescription(questionsList)
     .setColor('#5865F2')
     .setFooter({ text: `Use /addquestion or /removequestion to modify | 📝 = Text | ✅ = Yes/No` });
-  
+
   await interaction.reply({ embeds: [embed], ephemeral: true });
 }
 
 // Select Menu Handler
 async function handleSelectMenu(interaction) {
   try {
+    const guildId = interaction.guildId;
+    const config = loadServerConfig(guildId);
+
+    if (config.applicationsClosed) {
+      return await interaction.reply({ content: 'applications are closed right now. you can apply soon.', ephemeral: true });
+    }
+
     if (interaction.customId === 'application_select') {
       // Acknowledge the interaction immediately to reset the selection state
       await interaction.update({
         components: interaction.message.components
       }).catch(err => console.error('Error updating interaction:', err));
-      
+
       await handleApplicationStart(interaction);
     }
   } catch (error) {
@@ -889,14 +933,14 @@ async function handleApplicationStart(interaction) {
     const selectedValue = interaction.values[0];
     const categoryName = selectedValue.replace('apply_', '').replace(/_/g, ' ');
     const category = config.categories.find(cat => cat.name.toLowerCase() === categoryName.toLowerCase());
-    
+
     if (!category) {
       return interaction.followUp({
         content: '❌ Application category not found!',
         ephemeral: true
       }).catch(() => {});
     }
-    
+
     // Check cooldown
     const cooldownCheck = checkCooldown(interaction.user.id, interaction.guildId, config, interaction.member);
     if (!cooldownCheck.canApply) {
@@ -905,7 +949,7 @@ async function handleApplicationStart(interaction) {
         ephemeral: true
       }).catch(() => {});
     }
-    
+
     // Try to DM user
     try {
       const dmEmbed = new EmbedBuilder()
@@ -913,9 +957,9 @@ async function handleApplicationStart(interaction) {
         .setDescription(`You are about to start your application for **${category.name}**.\n\nI will ask you ${category.questions.length} questions. Please answer each one carefully.\n\n**Note:** Type your answers in this DM. Type \`cancel\` at any time to stop the application.`)
         .setColor('#5865F2')
         .setFooter({ text: `${interaction.guild.name}`, iconURL: interaction.guild.iconURL() });
-      
+
       await interaction.user.send({ embeds: [dmEmbed] });
-      
+
       // Initialize application session
       activeApplications.set(interaction.user.id, {
         guildId: interaction.guildId,
@@ -925,10 +969,10 @@ async function handleApplicationStart(interaction) {
         currentQuestion: 0,
         questions: category.questions
       });
-      
+
       // Ask first question
       await askQuestion(interaction.user, category.questions[0], 1, category.questions.length);
-      
+
       await interaction.followUp({
         content: '✅ Check your DMs! I\'ve sent you the application questions.',
         ephemeral: true
@@ -962,7 +1006,7 @@ async function askQuestion(user, question, number, total) {
         .setDescription(question.text)
         .setColor('#5865F2')
         .setFooter({ text: 'Type your answer below' });
-      
+
       await user.send({ embeds: [embed] });
     } else if (question.type === 'yes_no') {
       const embed = new EmbedBuilder()
@@ -970,7 +1014,7 @@ async function askQuestion(user, question, number, total) {
         .setDescription(question.text)
         .setColor('#5865F2')
         .setFooter({ text: 'Click a button below' });
-      
+
       const row = new ActionRowBuilder()
         .addComponents(
           new ButtonBuilder()
@@ -982,7 +1026,7 @@ async function askQuestion(user, question, number, total) {
             .setLabel('No')
             .setStyle(ButtonStyle.Danger)
         );
-      
+
       await user.send({ embeds: [embed], components: [row] });
     }
   } catch (error) {
@@ -998,28 +1042,28 @@ async function askQuestion(user, question, number, total) {
 // DM Message Handler
 client.on('messageCreate', async message => {
   if (message.author.bot || !message.guild === null || message.channel.type !== 1) return;
-  
+
   const session = activeApplications.get(message.author.id);
   if (!session) return;
-  
+
   // Check if user wants to cancel
   if (message.content.toLowerCase() === 'cancel') {
     activeApplications.delete(message.author.id);
     return message.reply('❌ Application cancelled.');
   }
-  
+
   // Only process text answers
   const currentQuestion = session.questions[session.currentQuestion];
   if (currentQuestion.type !== 'text') return;
-  
+
   // Save answer
   session.answers.push({
     question: currentQuestion.text,
     answer: message.content
   });
-  
+
   session.currentQuestion++;
-  
+
   // Check if more questions
   if (session.currentQuestion < session.questions.length) {
     await askQuestion(message.author, session.questions[session.currentQuestion], session.currentQuestion + 1, session.questions.length);
@@ -1036,35 +1080,35 @@ async function handleButton(interaction) {
     if (!session) {
       return interaction.reply({ content: '❌ No active application found.', ephemeral: true });
     }
-    
+
     const answer = interaction.customId === 'answer_yes' ? 'Yes' : 'No';
     const currentQuestion = session.questions[session.currentQuestion];
-    
+
     session.answers.push({
       question: currentQuestion.text,
       answer: answer
     });
-    
+
     await interaction.update({ components: [] });
-    
+
     session.currentQuestion++;
-    
+
     if (session.currentQuestion < session.questions.length) {
       await askQuestion(interaction.user, session.questions[session.currentQuestion], session.currentQuestion + 1, session.questions.length);
     } else {
       await submitApplication(interaction.user, session);
     }
   }
-  
+
   // Admin review buttons
   if (interaction.customId.startsWith('app_accept_') || interaction.customId.startsWith('app_deny_')) {
     await handleReviewButton(interaction);
   }
-  
+
   if (interaction.customId.startsWith('app_history_')) {
     await handleHistoryButton(interaction);
   }
-  
+
   if (interaction.customId.startsWith('app_ticket_')) {
     await handleTicketButton(interaction);
   }
@@ -1074,10 +1118,10 @@ async function handleButton(interaction) {
 async function submitApplication(user, session) {
   const config = loadServerConfig(session.guildId);
   const applications = loadApplications(session.guildId);
-  
+
   const logChannelId = config.logChannelId;
   const logChannel = await client.guilds.cache.get(session.guildId).channels.fetch(logChannelId).catch(() => null);
-  
+
   if (!logChannel) {
     console.error('Log channel not found!');
     return;
@@ -1085,10 +1129,10 @@ async function submitApplication(user, session) {
 
   // Build application content
   let appContent = `**New Application Received!**\n\n`;
-  appContent += `**Applicant:** ${user.username} (${user.id})\n`;
+  appContent += `**Applicant:** <@${user.id}> (${user.id})\n`;
   appContent += `**Category:** ${session.category}\n`;
   appContent += `**Submitted:** <t:${Math.floor(Date.now() / 1000)}:R>\n\n`;
-  
+
   session.answers.forEach((ans, i) => {
     appContent += `**${i + 1}. ${ans.question}**\n${ans.answer || 'No answer'}\n\n`;
   });
@@ -1096,7 +1140,7 @@ async function submitApplication(user, session) {
   // Handle character limit (4096 for embed description)
   const chunks = [];
   let currentChunk = '';
-  
+
   const lines = appContent.split('\n');
   for (const line of lines) {
     if ((currentChunk + line).length > 3900) {
@@ -1108,7 +1152,7 @@ async function submitApplication(user, session) {
   if (currentChunk) chunks.push(currentChunk);
 
   const applicationId = Date.now().toString().slice(-8);
-  
+
   let firstMessage = null;
   for (let i = 0; i < chunks.length; i++) {
     const embed = new EmbedBuilder()
@@ -1147,10 +1191,10 @@ async function submitApplication(user, session) {
     channelId: logChannel.id
   });
   saveApplications(session.guildId, applications);
-  
+
   // Update cooldown
   setCooldown(user.id, session.guildId);
-  
+
   // Notify user
   const successEmbed = new EmbedBuilder()
     .setTitle('✅ Application Submitted!')
@@ -1158,9 +1202,9 @@ async function submitApplication(user, session) {
     .setColor('#00FF00')
     .setFooter({ text: `Application ID: ${applicationId}` })
     .setTimestamp();
-  
+
   await user.send({ embeds: [successEmbed] });
-  
+
   // Clean up session
   activeApplications.delete(user.id);
 }
@@ -1168,57 +1212,57 @@ async function submitApplication(user, session) {
 // Review Button Handler
 async function handleReviewButton(interaction) {
   const config = loadServerConfig(interaction.guildId);
-  
+
   if (!isAdmin(interaction.member, config)) {
     return interaction.reply({
       content: '❌ You do not have permission to review applications.',
       ephemeral: true
     });
   }
-  
+
   const action = interaction.customId.startsWith('app_accept_') ? 'accept' : 'deny';
   const applicationId = interaction.customId.replace(`app_${action}_`, '');
-  
+
   const modal = new ModalBuilder()
     .setCustomId(`review_${action}_${applicationId}`)
     .setTitle(`${action === 'accept' ? 'Accept' : 'Deny'} Application`);
-  
+
   const reasonInput = new TextInputBuilder()
     .setCustomId('reason')
     .setLabel('Reason (will be sent to applicant)')
     .setStyle(TextInputStyle.Paragraph)
     .setRequired(true)
     .setPlaceholder(action === 'accept' ? 'Welcome to the team! You showed great...' : 'Unfortunately, we cannot accept your application because...');
-  
+
   modal.addComponents(new ActionRowBuilder().addComponents(reasonInput));
-  
+
   await interaction.showModal(modal);
 }
 
 // History Button Handler
 async function handleHistoryButton(interaction) {
   const config = loadServerConfig(interaction.guildId);
-  
+
   if (!isAdmin(interaction.member, config)) {
     return interaction.reply({
       content: '❌ You do not have permission to view application history.',
       ephemeral: true
     });
   }
-  
+
   const userId = interaction.customId.replace('app_history_', '');
   const applications = loadApplications(interaction.guildId);
   const userApps = applications.filter(app => app.userId === userId);
-  
+
   if (userApps.length === 0) {
     return interaction.reply({
       content: '📋 No application history found for this user.',
       ephemeral: true
     });
   }
-  
+
   let historyText = `**Application History for <@${userId}>**\n\n`;
-  
+
   userApps.forEach((app, i) => {
     const statusEmoji = app.status === 'accepted' ? '✅' : app.status === 'denied' ? '❌' : '⏳';
     historyText += `${i + 1}. ${statusEmoji} **${app.category}** - <t:${Math.floor(app.timestamp / 1000)}:D>\n`;
@@ -1226,60 +1270,60 @@ async function handleHistoryButton(interaction) {
     if (app.reviewedBy) historyText += `   Reviewed by: <@${app.reviewedBy}>\n`;
     historyText += `\n`;
   });
-  
+
   const embed = new EmbedBuilder()
     .setTitle('📋 Application History')
     .setDescription(historyText)
     .setColor('#5865F2');
-  
+
   await interaction.reply({ embeds: [embed], ephemeral: true });
 }
 
 // Ticket Button Handler
 async function handleTicketButton(interaction) {
   const config = loadServerConfig(interaction.guildId);
-  
+
   if (!isAdmin(interaction.member, config)) {
     return interaction.reply({
       content: '❌ You do not have permission to open tickets.',
       ephemeral: true
     });
   }
-  
+
   if (!config.ticketCategoryId) {
     return interaction.reply({
       content: '❌ Ticket category not set. Use `/setticketcategory` first!',
       ephemeral: true
     });
   }
-  
+
   const applicationId = interaction.customId.replace('app_ticket_', '');
   const applications = loadApplications(interaction.guildId);
   const application = applications.find(app => app.id === applicationId);
-  
+
   if (!application) {
     return interaction.reply({
       content: '❌ Application not found!',
       ephemeral: true
     });
   }
-  
+
   await interaction.deferReply({ ephemeral: true });
-  
+
   try {
     const user = await client.users.fetch(application.userId);
     const ticketName = `ticket-${user.username.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
-    
+
     // Check if ticket already exists
     const channels = await interaction.guild.channels.fetch();
     const existingTicket = channels.find(c => c.name === ticketName && c.parentId === config.ticketCategoryId);
-    
+
     if (existingTicket) {
       return interaction.editReply({
         content: `❌ A ticket is already open for this user: ${existingTicket}`
       });
     }
-    
+
     const ticketChannel = await interaction.guild.channels.create({
       name: ticketName,
       type: ChannelType.GuildText,
@@ -1291,23 +1335,23 @@ async function handleTicketButton(interaction) {
         },
         {
           id: user.id,
-          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]
+          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory]
         },
         ...config.adminRoleIds.map(roleId => ({
           id: roleId,
-          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages]
+          allow: [PermissionFlagsBits.ViewChannel, PermissionFlagsBits.SendMessages, PermissionFlagsBits.ReadMessageHistory]
         }))
       ]
     });
-    
+
     const ticketEmbed = new EmbedBuilder()
       .setTitle('🎫 Application Ticket')
       .setDescription(`Hello ${user}!\n\nThis ticket has been opened regarding your **${application.category}** application.\n\nAn admin will be with you shortly to discuss your application.`)
       .setColor('#5865F2')
       .setTimestamp();
-    
+
     await ticketChannel.send({ content: `${user} ${config.adminRoleIds.map(id => `<@&${id}>`).join(' ')}`, embeds: [ticketEmbed] });
-    
+
     await interaction.editReply({
       content: `✅ Ticket created: ${ticketChannel}`
     });
@@ -1333,23 +1377,23 @@ async function handleReviewModal(interaction) {
   const action = interaction.customId.includes('accept') ? 'accept' : 'deny';
   const applicationId = interaction.customId.replace(`review_${action}_`, '');
   const reason = interaction.fields.getTextInputValue('reason');
-  
+
   const applications = loadApplications(interaction.guildId);
   const application = applications.find(app => app.id === applicationId);
-  
+
   if (!application) {
     return interaction.reply({
       content: '❌ Application not found!',
       ephemeral: true
     });
   }
-  
+
   // Update application
   application.status = action === 'accept' ? 'accepted' : 'denied';
   application.reviewedBy = interaction.user.id;
   application.reason = reason;
   saveApplications(interaction.guildId, applications);
-  
+
   // Update embed
   const originalEmbed = EmbedBuilder.from(interaction.message.embeds[0]);
   originalEmbed.setColor(action === 'accept' ? '#00FF00' : '#FF0000');
@@ -1358,12 +1402,12 @@ async function handleReviewModal(interaction) {
     { name: '👤 Reviewed By', value: `${interaction.user.tag}`, inline: true },
     { name: '📝 Reason', value: reason }
   );
-  
+
   await interaction.message.edit({ embeds: [originalEmbed], components: [] });
-  
+
   // Defer the reply to avoid interaction timeout
   await interaction.deferReply({ ephemeral: true });
-  
+
   // DM user
   try {
     const userObj = await client.users.fetch(application.userId);
@@ -1373,32 +1417,32 @@ async function handleReviewModal(interaction) {
       .setColor(action === 'accept' ? '#00FF00' : '#FF0000')
       .setFooter({ text: interaction.guild.name, iconURL: interaction.guild.iconURL() })
       .setTimestamp();
-    
+
     await userObj.send({ embeds: [dmEmbed] });
-    
+
     // Delete ticket channel if it exists
     const ticketName = `ticket-${userObj.username.toLowerCase().replace(/[^a-z0-9]/g, '')}`;
     const channels = await interaction.guild.channels.fetch();
     const config = loadServerConfig(interaction.guildId);
     const ticketChannel = channels.find(c => c.name === ticketName && c.parentId === config.ticketCategoryId);
-    
+
     if (ticketChannel) {
       await ticketChannel.delete('Application processed').catch(console.error);
     }
-    
+
     // Auto-role assignment if accepted
     if (action === 'accept') {
       const category = config.categories.find(cat => cat.name === application.category);
-      
+
       if (category && (category.roleId || category.roleIds)) {
         try {
           const member = await interaction.guild.members.fetch(application.userId);
           const roleIdsToAssign = category.roleIds || (category.roleId ? [category.roleId] : []);
-          
+
           for (const roleId of roleIdsToAssign) {
             await member.roles.add(roleId).catch(err => console.error(`Failed to assign role ${roleId}:`, err));
           }
-          
+
           if (roleIdsToAssign.length > 0) {
             await userObj.send(`🎭 You have been assigned the roles for **${category.name}**!`);
           }
@@ -1410,7 +1454,7 @@ async function handleReviewModal(interaction) {
   } catch (error) {
     console.error('Error processing application result:', error);
   }
-  
+
   await interaction.editReply({
     content: `✅ Application ${action === 'accept' ? 'accepted' : 'denied'} and user has been notified!`
   });
@@ -1421,14 +1465,14 @@ async function handleEditQuestionsModal(interaction) {
   const categoryName = interaction.customId.replace('edit_questions_', '');
   const config = loadServerConfig(interaction.guildId);
   const category = config.categories.find(cat => cat.name === categoryName);
-  
+
   if (!category) {
     return interaction.reply({
       content: '❌ Category not found!',
       ephemeral: true
     });
   }
-  
+
   // Update questions
   const newQuestions = [];
   const totalQuestionsDisplayed = Math.min(5, category.questions.length);
@@ -1438,22 +1482,22 @@ async function handleEditQuestionsModal(interaction) {
       newQuestions.push({ text: value.trim(), type: 'text' });
     }
   }
-  
+
   // If there were more than 5 questions, preserve the rest
   if (category.questions.length > 5) {
     newQuestions.push(...category.questions.slice(5));
   }
-  
+
   if (newQuestions.length === 0) {
     return interaction.reply({
       content: '❌ You must provide at least one question!',
       ephemeral: true
     });
   }
-  
+
   category.questions = newQuestions;
   saveServerConfig(interaction.guildId, config);
-  
+
   await interaction.reply({
     content: `✅ Questions updated for **${categoryName}**! (${newQuestions.length} questions)`,
     ephemeral: true
@@ -1471,13 +1515,13 @@ async function handlePendingApplications(interaction) {
   const config = loadServerConfig(interaction.guildId);
   const applications = loadApplications(interaction.guildId);
   const pendingApps = applications.filter(app => app.status === 'pending');
-  
+
   if (pendingApps.length === 0) {
     return interaction.reply({ content: '✅ No pending applications!', ephemeral: true });
   }
-  
+
   let listText = `**Total Pending Applications: ${pendingApps.length}**\n\n`;
-  
+
   pendingApps.forEach((app, i) => {
     const link = (app.messageId && app.channelId) ? `[Jump to Message](https://discord.com/channels/${interaction.guildId}/${app.channelId}/${app.messageId})` : 'Link unavailable';
     const member = interaction.guild.members.cache.get(app.userId);
@@ -1495,6 +1539,6 @@ async function handlePendingApplications(interaction) {
     .setDescription(listText)
     .setColor('#FFA500')
     .setTimestamp();
-    
+
   await interaction.reply({ embeds: [embed], ephemeral: true });
 }
